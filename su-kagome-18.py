@@ -2,7 +2,6 @@
 
 import sys
 import time
-import argparse
 from scipy.linalg import expm
 import scipy.linalg as spl
 import numpy as np
@@ -93,6 +92,7 @@ class Tensors_CTM():
         self.mxc=0
         self.mzc=0
         self.E_down = 0
+
 ################################################################
 def spin_operators(S):
 
@@ -132,7 +132,7 @@ def Hamiltonian_Heisen_In_Trian(J,Hz,spin):
 
     return np.real(H), np.real(Ham.reshape(d_spin, d_spin, d_spin, d_spin))
 
-def Hamiltonian_Chiral_In_Trian(J,J_chi,Hz,spin):
+def ImagTimeEvo(Jab,Jbc,Jca,Hz,dt):
 
     Sx, Sy, Sz = spin_operators(spin)
     I =np.eye(d_spin,d_spin)
@@ -141,49 +141,30 @@ def Hamiltonian_Chiral_In_Trian(J,J_chi,Hz,spin):
     H_AB = np.kron(np.kron(Sx,Sx), I) + np.kron(np.kron(Sy,Sy), I) + np.kron(np.kron(Sz,Sz), I)
     H_CA = np.kron(np.kron(Sx,I), Sx) + np.kron(np.kron(Sy,I), Sy) + np.kron(np.kron(Sz,I), Sz)
 
-    Ham = J*(np.kron(Sx,Sx) + np.kron(Sy,Sy) + np.kron(Sz,Sz)) - 0.25 * Hz *( np.kron(Sz,I) + np.kron(I,Sz) )
-    H =  J*(H_AB + H_BC + H_CA) - 0.5*Hz*(np.kron(np.kron(Sz,I), I) + np.kron(np.kron(I,Sz), I) + np.kron(np.kron(I,I), Sz))
-    H_chi = J_chi*( np.kron(np.kron(Sx,Sy), Sz) + np.kron(np.kron(Sy,Sz), Sx) + np.kron(np.kron(Sz,Sx), Sy) \
-        - np.kron(np.kron(Sx,Sz), Sy) - np.kron(np.kron(Sy,Sx), Sz) - np.kron(np.kron(Sz,Sy), Sx))
+    H =  Jab*H_AB + Jbc*H_BC + Jca*H_CA - 0.5*Hz*(np.kron(np.kron(Sz,I), I) + np.kron(np.kron(I,Sz), I) + np.kron(np.kron(I,I), Sz))
+    U = expm(-dt*H).reshape(d_spin, d_spin, d_spin, d_spin, d_spin, d_spin)
 
-    return H_chi + H
+
+
+    return np.real(U)
 ###########################################################################
 def initial_iPESS(Dx, d_spin):
 
     ## random
     
-    A1 = np.random.random((Dx, d_spin, Dx))# + 1.0j
-    B1 = np.random.random((Dx, d_spin, Dx))# + 1.0j 
-    C1 = np.random.random((Dx, d_spin, Dx))# + 1.0j
-
-    A2 = np.random.random((Dx, d_spin, Dx))# + 1.0j
-    B2 = np.random.random((Dx, d_spin, Dx))# + 1.0j 
-    C2 = np.random.random((Dx, d_spin, Dx))# + 1.0j
-
-    A3 = np.random.random((Dx, d_spin, Dx))# + 1.0j
-    B3 = np.random.random((Dx, d_spin, Dx))# + 1.0j 
-    C3 = np.random.random((Dx, d_spin, Dx))# + 1.0j
+    A = np.random.random((Dx, d_spin, Dx))# + 1.0j
+    B = np.random.random((Dx, d_spin, Dx))# + 1.0j 
+    C = np.random.random((Dx, d_spin, Dx))# + 1.0j
 
     R_up  = np.random.random((Dx,Dx,Dx))# + 1.0j
     R_low = np.random.random((Dx,Dx,Dx))# + 1.0j
 
-   
-
-
-
     # vector lu, lr, ld, ll
-    l = np.ones(A1.shape[0], dtype=float)
+    l = np.ones(A.shape[0], dtype=float)
     for i in np.arange(len(l)):    l[i] /= 10**i
     l /= np.sqrt(np.dot(l,l))
     
-    return A1, A1, A3, A1, A3, A1, A3, A1, A1, R_up, R_up, R_up, R_up, R_up, R_up, \
-           l, l, l, l, l, l, l, l, l, l, l, l, l, l, l, l, l, l    
-
-    #return A1, A1, A1, A1, A1, A1, A1, A1, A1, R_up, R_up, R_up, R_up, R_up, R_up, \
-    #       l, l, l, l, l, l, l, l, l, l, l, l, l, l, l, l, l, l  
-
-    #return A1, A2, A3, B1, B2, B3, C1, C2, C3, R_up, R_up, R_up, R_low, R_low, R_low, \
-    #       l, l, l, l, l, l, l, l, l, l, l, l, l, l, l, l, l, l
+    return A, B, C, R_up, R_low, l,l,l,l,l,l    
 
 def SimpleUpdate_down(A,B,C,R,la,lb,lc,U):
     #
@@ -220,32 +201,32 @@ def SimpleUpdate_down(A,B,C,R,la,lb,lc,U):
     )
 
 
-    Tmp = np.tensordot(V, V.conj(),([1,2,4,5], [1,2,4,5]) ) ##  (0,3)
-    #uA, la_new = tensor_eigh(Tmp, (0,1),(2,3),D)
-    uA, la_new, _ = tensor_svd(Tmp,(0,1),(2,3),D)
+    Tmp = np.tensordot(V, V,([1,2,4,5], [1,2,4,5]) ) ##  (0,3)
+    #uA, la_new = tensor_eigh(Tmp, (0,1),(2,3),D_cut)
+    uA, la_new, _ = tensor_svd(Tmp,(0,1),(2,3),D_cut)
     la_new = np.sqrt(la_new)
     la_new = la_new/np.sqrt(np.dot(la_new,la_new))
     A = uA*(1/la)[:,None,None]
 
-    Tmp = np.tensordot(V, V.conj(),([0,2,3,5], [0,2,3,5]) ) ##  (1,4)
-    #uB, lb_new = tensor_eigh(Tmp, (0,1),(2,3),D)
-    uB, lb_new, _ = tensor_svd(Tmp,(0,1),(2,3),D)
+    Tmp = np.tensordot(V, V,([0,2,3,5], [0,2,3,5]) ) ##  (1,4)
+    #uB, lb_new = tensor_eigh(Tmp, (0,1),(2,3),D_cut)
+    uB, lb_new, _ = tensor_svd(Tmp,(0,1),(2,3),D_cut)
     lb_new = np.sqrt(lb_new)
     lb_new = lb_new/np.sqrt(np.dot(lb_new,lb_new))
     B = uB*(1/lb)[:,None,None] 
 
-    Tmp = np.tensordot(V, V.conj(),([0,1,3,4], [0,1,3,4]) ) ##  (2,5)
-    #uC, lc_new = tensor_eigh(Tmp, (0,1),(2,3),D)
-    uC, lc_new, _ = tensor_svd(Tmp,(0,1),(2,3),D)
+    Tmp = np.tensordot(V, V,([0,1,3,4], [0,1,3,4]) ) ##  (2,5)
+    #uC, lc_new = tensor_eigh(Tmp, (0,1),(2,3),D_cut)
+    uC, lc_new, _ = tensor_svd(Tmp,(0,1),(2,3),D_cut)
     lc_new = np.sqrt(lc_new)
     lc_new = lc_new/np.sqrt(np.dot(lc_new,lc_new))
     C = uC*(1/lc)[:,None,None] 
 
     
     R_new = np.tensordot(
-        uA.conj(), np.tensordot(
-            uB.conj(), np.tensordot(
-                V, uC.conj(), ([2, 5], [0, 1])
+        uA, np.tensordot(
+            uB, np.tensordot(
+                V, uC, ([2, 5], [0, 1])
             ), ([0, 1], [1, 3])
         ), ([0, 1], [1, 2])
     )
@@ -279,19 +260,19 @@ def SimpleUpdate_up(B,C,A,R,lb,lc,la,U):
     )
 
     Tmp = np.tensordot(V, V.conj(),([1,2,4,5], [1,2,4,5]) ) ##  (0,3)
-    uB, lb_new, _ = tensor_svd(Tmp,(0,1),(2,3),D)
+    uB, lb_new, _ = tensor_svd(Tmp,(0,1),(2,3),D_cut)
     lb_new = np.sqrt(lb_new)
     lb_new = lb_new/np.sqrt(np.dot(lb_new,lb_new))
     B = np.transpose(uB*(1/lb)[:,None,None],[2,1,0])
 
     Tmp = np.tensordot(V, V.conj(),([0,2,3,5], [0,2,3,5]) ) ##  (1,4)
-    uC, lc_new, _ = tensor_svd(Tmp,(0,1),(2,3),D)
+    uC, lc_new, _ = tensor_svd(Tmp,(0,1),(2,3),D_cut)
     lc_new = np.sqrt(lc_new)
     lc_new = lc_new/np.sqrt(np.dot(lc_new,lc_new))
     C = np.transpose(uC*(1/lc)[:,None,None],[2,1,0]) 
 
     Tmp = np.tensordot(V, V.conj(),([0,1,3,4], [0,1,3,4]) ) ##  (2,5)
-    uA, la_new, _ = tensor_svd(Tmp,(0,1),(2,3),D)
+    uA, la_new, _ = tensor_svd(Tmp,(0,1),(2,3),D_cut)
     la_new = np.sqrt(la_new)
     la_new = la_new/np.sqrt(np.dot(la_new,la_new))
     A = np.transpose(uA*(1/la)[:,None,None] ,[2,1,0])
@@ -324,36 +305,37 @@ def Energy_Triangle(A,B,C,R, la_up, lb_up, lc_up, H, Ham):
             ), np.tensordot(
                 np.tensordot(
                     B, np.tensordot(
-                        B.conj(), R, ([2], [1])
+                        B.conj(), R.conj(), ([2], [1])
                     ), ([0], [0])
                 ), np.tensordot(
                     C.conj(), np.tensordot(
-                        C, R.conj(), ([2], [2])
+                        C, R, ([2], [1])
                     ), ([0], [0])
                 ), ([1, 4], [4, 1])
             ), ([1, 3], [5, 2])
         ), [0, 2, 5, 1, 3, 4]
     )
-    
     """
+
     tmp = np.transpose(
         np.tensordot(
             np.tensordot(
-                A, A.conj(), ([0], [0])
+                A, A, ([0], [0])
             ), np.tensordot(
                 np.tensordot(
                     B, np.tensordot(
-                        C, R, ([2], [2])
-                    ), ([2], [3])
+                        B, R, ([2], [1])
+                    ), ([0], [0])
                 ), np.tensordot(
-                    B.conj(), np.tensordot(
-                        C.conj(), R.conj(), ([2], [2])
-                    ), ([2], [3])
-                ), ([0, 2], [0, 2])
-            ), ([1, 3], [2, 5])
-        ), [0, 2, 3, 1, 4, 5]
+                    C, np.tensordot(
+                        C, R, ([2], [2])
+                    ), ([0], [0])
+                ), ([1, 4], [4, 1])
+            ), ([1, 3], [5, 2])
+        ), [0, 2, 5, 1, 3, 4]
     )
-    
+
+
     norm = np.einsum(tmp, (0, 1, 2, 0, 1, 2), ())
 
     E_AB = np.einsum(tmp, (0, 1, 2, 3, 4, 2), (0, 1, 3, 4)) 
@@ -365,7 +347,7 @@ def Energy_Triangle(A,B,C,R, la_up, lb_up, lc_up, H, Ham):
     E_CA = np.einsum(tmp, (0, 1, 2, 3, 1, 4), (0, 2, 3, 4))
     E_CA = np.tensordot(E_CA, Ham, ([0,1,2,3],[0,1,2,3]))/norm
 
-    E = np.tensordot(tmp.conj(), H, ([0,1,2,3,4,5],[0,1,2,3,4,5]))/norm
+    E = np.tensordot(tmp, H, ([0,1,2,3,4,5],[0,1,2,3,4,5]))/norm
 
     #print(E, E_AB+E_BC+E_CA, "\n")
     #print(E_AB, E_BC, E_CA)
@@ -448,17 +430,76 @@ def initial_CTM(ta):
 
     return C1, C2, C3, C4, T1, T2, T3, T4
 
-def ComputeQuantities_down_triangle(ta,Ta,A2,A3,A4,C1,C2,C3,C4,T11,T12,T21,T22,T31,T32,T41,T42,H):
+def ComputeQuantities_down_triangle(ta,Ta,C1,C2,C3,C4,T1,T2,T3,T4):
 
     def Calc_impurity_tensor(psi):
 
         Sx,Sy,Sz = spin_operators(spin)
+        dim = ta.shape[0]
 
-        ## Energy on ABC
-        H_psi = np.tensordot(psi, H.reshape(d_spin, d_spin, d_spin, d_spin, d_spin, d_spin), ([4,5,6],[3,4,5]))
-        Ta_imp = np.tensordot(H_psi.conj(),psi,([4,5,6],[4,5,6])).transpose(0,4,1,5,2,6,3,7)
-        dim = Ta_imp.shape[0]
-        Ta_imp = Ta_imp.reshape(dim**2, dim**2, dim**2, dim**2)
+        # Magnetization on A site
+        SzA_psi = np.tensordot(psi, Sz, ([4],[1])).transpose(0,1,2,3,6,4,5)
+        SzA_imp = np.tensordot(SzA_psi,psi,([4,5,6],[4,5,6])).transpose(0,4,1,5,2,6,3,7)
+        SzA_imp = SzA_imp.reshape(dim**2, dim**2, dim**2, dim**2)
+        SxA_psi = np.tensordot(psi, Sx, ([4],[1])).transpose(0,1,2,3,6,4,5)
+        SxA_imp = np.tensordot(SxA_psi,psi,([4,5,6],[4,5,6])).transpose(0,4,1,5,2,6,3,7)
+        SxA_imp = SxA_imp.reshape(dim**2, dim**2, dim**2, dim**2)
+
+        # Magnetization on B site
+        SzB_psi = np.tensordot(psi, Sz, ([5],[1])).transpose(0,1,2,3,4,6,5)
+        SzB_imp = np.tensordot(SzB_psi,psi,([4,5,6],[4,5,6])).transpose(0,4,1,5,2,6,3,7)
+        SzB_imp = SzB_imp.reshape(dim**2, dim**2, dim**2, dim**2)
+        SxB_psi = np.tensordot(psi, Sx, ([5],[1])).transpose(0,1,2,3,4,6,5)
+        SxB_imp = np.tensordot(SxB_psi,psi,([4,5,6],[4,5,6])).transpose(0,4,1,5,2,6,3,7)
+        SxB_imp = SxB_imp.reshape(dim**2, dim**2, dim**2, dim**2)
+
+        # Magnetization on C site
+        SzC_psi = np.tensordot(psi, Sz, ([6],[1]))
+        SzC_imp = np.tensordot(SzC_psi,psi,([4,5,6],[4,5,6])).transpose(0,4,1,5,2,6,3,7)
+        SzC_imp = SzC_imp.reshape(dim**2, dim**2, dim**2, dim**2)
+        SxC_psi = np.tensordot(psi, Sx, ([6],[1]))
+        SxC_imp = np.tensordot(SxC_psi,psi,([4,5,6],[4,5,6])).transpose(0,4,1,5,2,6,3,7)
+        SxC_imp = SxC_imp.reshape(dim**2, dim**2, dim**2, dim**2)
+
+        return SxA_imp, SzA_imp, SxB_imp, SzB_imp, SxC_imp, SzC_imp
+
+    SxA_imp, SzA_imp, SxB_imp, SzB_imp, SxC_imp, SzC_imp = Calc_impurity_tensor(ta)
+
+    Env = np.transpose(
+        np.tensordot(
+            np.tensordot(
+                T1, np.tensordot(
+                    C1, T4, ([0], [2])
+                ), ([0], [0])
+            ), np.tensordot(
+                np.tensordot(
+                    C2, T2, ([1], [0])
+                ), np.tensordot(
+                    C3, np.tensordot(
+                        T3, C4, ([2], [0])
+                    ), ([1], [0])
+                ), ([2], [0])
+            ), ([1, 2], [0, 3])
+        ), [0, 2, 3, 1]
+    )
+    norm = np.tensordot(Env, Ta, ([0,1,2,3],[0,1,2,3]))
+    #E = np.tensordot(Env, E_imp, ([0,1,2,3],[0,1,2,3]))/norm
+
+    mxa = np.tensordot(Env, SxA_imp, ([0,1,2,3],[0,1,2,3]))/norm
+    mxb = np.tensordot(Env, SxB_imp, ([0,1,2,3],[0,1,2,3]))/norm
+    mxc = np.tensordot(Env, SxC_imp, ([0,1,2,3],[0,1,2,3]))/norm
+    mza = np.tensordot(Env, SzA_imp, ([0,1,2,3],[0,1,2,3]))/norm
+    mzb = np.tensordot(Env, SzB_imp, ([0,1,2,3],[0,1,2,3]))/norm
+    mzc = np.tensordot(Env, SzC_imp, ([0,1,2,3],[0,1,2,3]))/norm
+
+    return mxa, mza, mxb, mzb, mxc, mzc
+
+def ComputeQuantities_down_triangle1(ta,Ta,A2,A3,A4,C1,C2,C3,C4,T11,T12,T21,T22,T31,T32,T41,T42):
+
+    def Calc_impurity_tensor(psi):
+
+        Sx,Sy,Sz = spin_operators(spin)
+        dim = ta.shape[0]
 
         # Magnetization on A site
         SzA_psi = np.tensordot(psi, Sz, ([4],[1])).transpose(0,1,2,3,6,4,5)
@@ -484,9 +525,9 @@ def ComputeQuantities_down_triangle(ta,Ta,A2,A3,A4,C1,C2,C3,C4,T11,T12,T21,T22,T
         SxC_imp = np.tensordot(SxC_psi,psi.conj(),([4,5,6],[4,5,6])).transpose(0,4,1,5,2,6,3,7)
         SxC_imp = SxC_imp.reshape(dim**2, dim**2, dim**2, dim**2)
 
-        return Ta_imp, SxA_imp, SzA_imp, SxB_imp, SzB_imp, SxC_imp, SzC_imp
+        return SxA_imp, SzA_imp, SxB_imp, SzB_imp, SxC_imp, SzC_imp
 
-    E_imp, SxA_imp, SzA_imp, SxB_imp, SzB_imp, SxC_imp, SzC_imp = Calc_impurity_tensor(ta)
+    SxA_imp, SzA_imp, SxB_imp, SzB_imp, SxC_imp, SzC_imp = Calc_impurity_tensor(ta)
 
     Cc1 = np.tensordot(T11, np.tensordot(C1,T42,([0],[2])), ([0],[0]))
 
@@ -530,7 +571,6 @@ def ComputeQuantities_down_triangle(ta,Ta,A2,A3,A4,C1,C2,C3,C4,T11,T12,T21,T22,T
     )
 
     norm = np.tensordot(Env, Ta, ([0,1,2,3],[0,1,2,3]))
-    E = np.tensordot(Env, E_imp, ([0,1,2,3],[0,1,2,3]))/norm
 
     mxa = np.tensordot(Env, SxA_imp, ([0,1,2,3],[0,1,2,3]))/norm
     mxb = np.tensordot(Env, SxB_imp, ([0,1,2,3],[0,1,2,3]))/norm
@@ -539,7 +579,7 @@ def ComputeQuantities_down_triangle(ta,Ta,A2,A3,A4,C1,C2,C3,C4,T11,T12,T21,T22,T
     mzb = np.tensordot(Env, SzB_imp, ([0,1,2,3],[0,1,2,3]))/norm
     mzc = np.tensordot(Env, SzC_imp, ([0,1,2,3],[0,1,2,3]))/norm
 
-    return E, mxa, mza, mxb, mzb, mxc, mzc
+    return mxa, mza, mxb, mzb, mxc, mzc
 ###########################################################################
 
 def Isometry(C1_n, C2_n, C3_n, C4_n):
@@ -762,113 +802,115 @@ def CTMRG(CTMs, Lx, Ly):
 ##  main function
 if __name__=="__main__":
     # obtain the arguments
+    if len(sys.argv) < 2:  D = 2
+    else:  D = int(sys.argv[1])
+    if len(sys.argv) < 3:  Hz_start = 0.0
+    else:  Hz_start = float(sys.argv[2])
+    if len(sys.argv) < 4:  dt = 0.1
+    else:  dt = float(sys.argv[3])
+    if len(sys.argv) < 5:  chi = D**2
+    else:  chi = int(sys.argv[4])
+    if len(sys.argv) < 6:  maxstepTEBD =20000
+    else:  maxstepTEBD = int(sys.argv[5])
+    if len(sys.argv) < 7:  maxstepCTM = 10
+    else:  maxstepCTM = int(sys.argv[6])
 
-    parser = argparse.ArgumentParser(description='',allow_abbrev=False)
-    #parser.add_argument("--omp_cores", type=int, default=1,help="number of OpenMP cores")
-    parser.add_argument("--D", type=int, default=2, help="Virtual bond dimension")
-    parser.add_argument("--J", type=float, default=1, help="maximal number of epochs")
-    parser.add_argument("--dt", type=float, default=0.01, help="inmaginary time")
-    parser.add_argument("--chi", type=int, default=20, help="bond dimensions of CTM")
-    parser.add_argument("--spin", type=float, default=0.5, help="spin value")
-    parser.add_argument("--Hz_start", type=float, default=0., help="intiail value of magnetic field")
-    parser.add_argument("--Hz_end", type=float, default=3.0, help="intiail value of magnetic field")
-    parser.add_argument("--Hz_step", type=float, default=0.1, help="step for magnetic field")
-    parser.add_argument("--maxstepTEBD", type=int, default=10000, help="maximal number of TEBD iterations")
-    parser.add_argument("--maxstepCTM", type=int, default=10, help="maximal number ofCTM iterations")
-    parser.add_argument("--eps_TEBD", type=float, default=1e-9, help="TEBD criterion for convergence")
+    # open the text file
+    name = 'D'+str(D)+'-kagome_dis'
+    f = open(name+'SU.txt','w')
+    f1 = open(name+'ctmrg.txt','w')
 
-    args = parser.parse_args()
+    D_cut = D
+    Ja = 1.0
+    Jb = 0.204
+    Jc = -0.104
+    Jd = 0.503
 
-    D= args.D
-    J= args.J
-    dt= args.dt
-    chi= args.chi
-    spin = args.spin
-    Hz_start= args.Hz_start
-    Hz_end= args.Hz_end
-    Hz_step= args.Hz_step
-    maxstepTEBD= args.maxstepTEBD
-    maxstepCTM= args.maxstepCTM
+    spin = 0.5
     d_spin = int(2*spin + 1 )
     tau = dt
     temp = 0.0
 
-    # open the text file
-    name = 'D'+str(D)+'S'+str(int(2*spin+1))+'-kagome_iso'
-    f = open(name+'.txt','w')
-
     # criterion for convergence
-    eps_TEBD = 1e-9;  eps_CTM = 10**(-10)
+    eps_TEBD = 10**(-9);  eps_CTM = 10**(-10)
     
     # Heisenberg
-    H, Ham = Hamiltonian_Heisen_In_Trian(J,Hz_start,spin)
-    U = expm(-dt*H).reshape(d_spin, d_spin, d_spin, d_spin, d_spin, d_spin)
-
-    # chiral
-    #H = Hamiltonian_Chiral_In_Trian(J,J_chi,0.0,spin)
+    #H, Ham = Hamiltonian_Heisen_In_Trian(J,Hz_start,spin)
     #U = expm(-dt*H).reshape(d_spin, d_spin, d_spin, d_spin, d_spin, d_spin)
 
 
     # intiail iPESS
-    A1, A2, A3, B1, B2, B3, C1, C2, C3,\
-    R1_up, R2_up, R3_up, R1_low, R2_low, R3_low,\
-    l_A1_up, l_A2_up, l_A3_up,\
-    l_A1_low, l_A2_low, l_A3_low,\
-    l_B1_up, l_B2_up, l_B3_up,\
-    l_B1_low, l_B2_low, l_B3_low,\
-    l_C1_up, l_C2_up, l_C3_up,\
-    l_C1_low, l_C2_low, l_C3_low, =initial_iPESS(D,d_spin)
+    A1, B1, C1, R1_up, R1_low, l_A1_low, l_B1_low, l_C1_low, l_B5_up, l_C1_up, l_A2_up = initial_iPESS(D, d_spin)
+    A2, B2, C2, R2_up, R2_low, l_A2_low, l_B2_low, l_C2_low, l_B1_up, l_C2_up, l_A3_up = initial_iPESS(D, d_spin)
+    A3, B3, C3, R3_up, R3_low, l_A3_low, l_B3_low, l_C3_low, l_B2_up, l_C3_up, l_A6_up = initial_iPESS(D, d_spin)
+    A4, B4, C4, R4_up, R4_low, l_A4_low, l_B4_low, l_C4_low, l_B6_up, l_C4_up, l_A5_up = initial_iPESS(D, d_spin)
+    A5, B5, C5, R5_up, R5_low, l_A5_low, l_B5_low, l_C5_low, l_B4_up, l_C5_up, l_A1_up = initial_iPESS(D, d_spin)
+    A6, B6, C6, R6_up, R6_low, l_A6_low, l_B6_low, l_C6_low, l_B3_up, l_C6_up, l_A4_up = initial_iPESS(D, d_spin)
 
-    for Hz in np.arange(Hz_start, Hz_end, Hz_step):
+
+    for Hz in np.arange(Hz_start, 1.20, 0.02):
+
         tau=dt
         for i in range(maxstepTEBD):
 
-            H, Ham = Hamiltonian_Heisen_In_Trian(J,Hz,spin)
-            H1, Ham1 = Hamiltonian_Heisen_In_Trian(J,Hz,spin)
-            U = expm(-tau*H).reshape(d_spin, d_spin,d_spin, d_spin, d_spin, d_spin)
-            U1 = expm(-tau*H1).reshape(d_spin, d_spin,d_spin, d_spin, d_spin, d_spin)
+            U1=ImagTimeEvo(Jd,Jb,Jd,Hz,tau)
+            U2=ImagTimeEvo(Jc,Ja,Jc,Hz,tau)
+            U3=ImagTimeEvo(Jb,Jd,Jd,Hz,tau)
+            U4=ImagTimeEvo(Ja,Jc,Jc,Hz,tau)
 
-            #H = Hamiltonian_Chiral_In_Trian(J,J_chi,0.0,spin)
-            #U = expm(-tau*H).reshape(d_spin, d_spin, d_spin, d_spin, d_spin, d_spin)
-
-            
+            #U1=ImagTimeEvo(Ja,Ja,Ja,Hz,tau)
+            #U2=ImagTimeEvo(Ja,Ja,Ja,Hz,tau)
+            #U3=ImagTimeEvo(Ja,Ja,Ja,Hz,tau)
+            #U4=ImagTimeEvo(Ja,Ja,Ja,Hz,tau)
+            #################  Update down Triangle  ##################################
             A1, B1, C1, R1_low, l_A1_low, l_B1_low, l_C1_low = \
-            SimpleUpdate_down(A1,B1,C1,R1_low,l_A1_up,l_B1_up,l_C1_up,U)
-            
+            SimpleUpdate_down(A1,B1,C1,R1_low,l_A1_up,l_B1_up,l_C1_up, U1)
+
             A2, B2, C2, R2_low, l_A2_low, l_B2_low, l_C2_low = \
-            SimpleUpdate_down(A2,B2,C2,R2_low,l_A2_up,l_B2_up,l_C2_up,U)
+            SimpleUpdate_down(A2,B2,C2,R2_low,l_A2_up,l_B2_up,l_C2_up, U2)
 
             A3, B3, C3, R3_low, l_A3_low, l_B3_low, l_C3_low = \
-            SimpleUpdate_down(A3,B3,C3,R3_low,l_A3_up,l_B3_up,l_C3_up,U) 
+            SimpleUpdate_down(A3,B3,C3,R3_low,l_A3_up,l_B3_up,l_C3_up, U2) 
             
-            
-            B1, C2, A3, R2_up, l_B1_up, l_C2_up, l_A3_up = \
-            SimpleUpdate_up(B1,C2,A3,R2_up,l_B1_low,l_C2_low,l_A3_low,U1)
+            A4, B4, C4, R4_low, l_A4_low, l_B4_low, l_C4_low = \
+            SimpleUpdate_down(A4,B4,C4,R4_low,l_A4_up,l_B4_up,l_C4_up, U2)
 
-            B2, C3, A1, R3_up, l_B2_up, l_C3_up, l_A1_up = \
-            SimpleUpdate_up(B2,C3,A1,R3_up,l_B2_low,l_C3_low,l_A1_low,U1)
+            A5, B5, C5, R5_low, l_A5_low, l_B5_low, l_C5_low = \
+            SimpleUpdate_down(A5,B5,C5,R5_low,l_A5_up,l_B5_up,l_C5_up, U1)
 
-            B3, C1, A2, R1_up, l_B3_up, l_C1_up, l_A2_up = \
-            SimpleUpdate_up(B3,C1,A2,R1_up,l_B3_low,l_C1_low,l_A2_low,U1)
-            
-            
-            #B1, C1, A1, R1_up, l_B1_up, l_C1_up, l_A1_up = \
-            #SimpleUpdate_up(B1,C1,A1,R1_up,l_B1_low,l_C1_low,l_A1_low,U)         
+            A6, B6, C6, R6_low, l_A6_low, l_B6_low, l_C6_low = \
+            SimpleUpdate_down(A6,B6,C6,R6_low,l_A6_up,l_B6_up,l_C6_up, U1)
 
+            #################  Update up Triangle  ##################################
+            
+            B1, C6, A2, R6_up, l_B1_up, l_C6_up, l_A2_up = \
+            SimpleUpdate_up(B1,C6,A2,R6_up,l_B1_low,l_C6_low,l_A2_low,U3)
+
+            B2, C4, A6, R4_up, l_B2_up, l_C4_up, l_A6_up = \
+            SimpleUpdate_up(B2,C4,A6,R4_up,l_B2_low,l_C4_low,l_A6_low,U4)
+
+            B3, C2, A1, R2_up, l_B3_up, l_C2_up, l_A1_up = \
+            SimpleUpdate_up(B3,C2,A1,R2_up,l_B3_low,l_C2_low,l_A1_low,U4)
+
+            B4, C3, A5, R3_up, l_B4_up, l_C3_up, l_A5_up = \
+            SimpleUpdate_up(B4,C3,A5,R3_up,l_B4_low,l_C3_low,l_A5_low,U4)
+
+            B5, C1, A3, R1_up, l_B5_up, l_C1_up, l_A3_up = \
+            SimpleUpdate_up(B5,C1,A3,R1_up,l_B5_low,l_C1_low,l_A3_low,U3)
+
+            B6, C5, A4, R5_up, l_B6_up, l_C5_up, l_A4_up = \
+            SimpleUpdate_up(B6,C5,A4,R5_up,l_B6_low,l_C5_low,l_A4_low,U3)
+            
             ##  Calculate Energy
-            E1_down = Energy_Triangle(A1,B1,C1,R1_low, l_A1_up, l_B1_up, l_C1_up, H, Ham)
-            E1_up   = Energy_Triangle(B1.transpose(2,1,0), C2.transpose(2,1,0), A3.transpose(2,1,0), R2_up, l_B1_low, l_C2_low, l_A3_low, H1, Ham1)
-            #E1_up   = Energy_Triangle(B1.transpose(2,1,0), C1.transpose(2,1,0), A1.transpose(2,1,0), R1_up, l_B1_low, l_C1_low, l_A1_low, H, Ham)
+            #E1_down = Energy_Triangle(A1,B1,C1,R1_low, l_A1_up, l_B1_up, l_C1_up, H, Ham)
+            #E1_up   = Energy_Triangle(B1.transpose(2,1,0), C2.transpose(2,1,0), A3.transpose(2,1,0), R2_up, l_B1_low, l_C2_low, l_A3_low, H, Ham)
 
-            E2_down = Energy_Triangle(A2,B2,C2,R2_low, l_A2_up, l_B2_up, l_C2_up, H, Ham)
-            E2_up   = Energy_Triangle(B2.transpose(2,1,0), C3.transpose(2,1,0), A1.transpose(2,1,0), R3_up, l_B2_low, l_C3_low, l_A1_low, H1, Ham1)
+            #E2_down = Energy_Triangle(A2,B2,C2,R2_low, l_A2_up, l_B2_up, l_C2_up, H, Ham)
+            #E2_up   = Energy_Triangle(B2.transpose(2,1,0), C3.transpose(2,1,0), A1.transpose(2,1,0), R3_up, l_B2_low, l_C3_low, l_A1_low, H, Ham)
 
-            E3_down = Energy_Triangle(A3,B3,C3,R3_low, l_A3_up, l_B3_up, l_C3_up, H, Ham)
-            E3_up   = Energy_Triangle(B3.transpose(2,1,0), C1.transpose(2,1,0), A2.transpose(2,1,0), R1_up, l_B3_low, l_C1_low, l_A2_low, H1, Ham1)
+            #E3_down = Energy_Triangle(A3,B3,C3,R3_low, l_A3_up, l_B3_up, l_C3_up, H, Ham)
+            #E3_up   = Energy_Triangle(B3.transpose(2,1,0), C1.transpose(2,1,0), A2.transpose(2,1,0), R1_up, l_B3_low, l_C1_low, l_A2_low, H, Ham)
 
-            E1 = (E1_up + E1_down)/3.  
-            E2 = (E2_up + E2_down)/3.
-            E3 = (E3_up + E3_down)/3.
 
             ## Calculate Magnetization
             mxa1, mya1, mza1 = Magnetization(A1, l_A1_up, l_A1_low)
@@ -883,57 +925,59 @@ if __name__=="__main__":
             mxb3, myb3, mzb3 = Magnetization(B3, l_B3_up, l_B3_low)
             mxc3, myc3, mzc3 = Magnetization(C3, l_C3_up, l_C3_low)
 
-            Mz =(mza1 + mza2 + mza3 + mzb1 + mzb2 + mzb3 + mzc1 + mzc2 + mzc3)/9. 
+            mxa4, mya4, mza4 = Magnetization(A4, l_A4_up, l_A4_low)
+            mxb4, myb4, mzb4 = Magnetization(B4, l_B4_up, l_B4_low)
+            mxc4, myc4, mzc4 = Magnetization(C4, l_C4_up, l_C4_low)
+
+            mxa5, mya5, mza5 = Magnetization(A5, l_A5_up, l_A5_low)
+            mxb5, myb5, mzb5 = Magnetization(B5, l_B5_up, l_B5_low)
+            mxc5, myc5, mzc5 = Magnetization(C5, l_C5_up, l_C5_low)
+
+            mxa6, mya6, mza6 = Magnetization(A6, l_A6_up, l_A6_low)
+            mxb6, myb6, mzb6 = Magnetization(B6, l_B6_up, l_B6_low)
+            mxc6, myc6, mzc6 = Magnetization(C6, l_C6_up, l_C6_low)
+
+            Mza = mza1 + mza2 + mza3 + mza4 + mza5 + mza6 
+            Mzb = mzb1 + mzb2 + mzb3 + mzb4 + mzb5 + mzb6 
+            Mzc = mzc1 + mzc2 + mzc3 + mzc4 + mzc5 + mzc6
+            M1 = (mza1+mzb1+mzc1 + mza5+mzb5+mzc5 + mza6+mzb6+mzc6 + mza2 + mza3 + mza4)/18.
+            M2 = (mzb2+mzb3+mzb4 + mzc2+mzc3+mzc4)/18.
+
+            Mz =(Mza + Mzb + Mzc)/18. 
 
 
             if i%100 ==0:
-                print(i, Mz/spin, abs(temp-Mz), (E1+E2+E3)/3.0)
-                print(i, E1, E2, E3,"\n")
-                #print(i, l_A1_up)
-                #print(i, l_A1_low)
-                #print(i, l_B1_up)
-                #print(i, l_B1_low)
-
+                print(i, Mz/spin, abs(temp-Mz), M1/spin, M2/spin)
+                #print("A: ",mxa1, mza1, np.sqrt(mxa1**2 + mza1**2))
+                #print("B: ",mxb1, mzb1, np.sqrt(mxb1**2 + mzb1**2))
+                #print("C: ",mxc1, mzc1, np.sqrt(mxc1**2 + mzc1**2), "\n")
+               
                 if abs(temp-Mz)<eps_TEBD and tau!=0.1 and tau!=0.01:
                     break
                 else: temp = Mz
+
             if (i+1)%3000 ==0:
                 tau = max(tau/10,0.00001)
 
-          
-        print("A1: ",mxa1, mza1, np.sqrt(mxa1**2 + mza1**2))
-        print("B1: ",mxb1, mzb1, np.sqrt(mxb1**2 + mzb1**2))
-        print("C1: ",mxc1, mzc1, np.sqrt(mxc1**2 + mzc1**2), "\n")
 
-        print("A2: ",mxa2, mza2, np.sqrt(mxa2**2 + mza2**2))
-        print("B2: ",mxb2, mzb2, np.sqrt(mxb2**2 + mzb2**2))
-        print("C2: ",mxc2, mzc2, np.sqrt(mxc2**2 + mzc2**2), "\n")
+        ta1 = Calcu_Unit_down(A1,B1,C1, R1_up, R1_low)
+        ta2 = Calcu_Unit_down(A2,B2,C2, R2_up, R2_low)
+        ta3 = Calcu_Unit_down(A3,B3,C3, R3_up, R3_low)
+        ta4 = Calcu_Unit_down(A4,B4,C4, R4_up, R4_low)
+        ta5 = Calcu_Unit_down(A5,B5,C5, R5_up, R5_low)
+        ta6 = Calcu_Unit_down(A6,B6,C6, R6_up, R6_low)
 
-        print("A3: ",mxa3, mza3, np.sqrt(mxa3**2 + mza3**2))
-        print("B3: ",mxb3, mzb3, np.sqrt(mxb3**2 + mzb3**2))
-        print("C3: ",mxc3, mzc3, np.sqrt(mxc3**2 + mzc3**2), "\n")
-        
-        print(Hz, Mz/spin)
-        f.write("{0:.8e}, {1:.8e}, {2:.8e}, {3:.8e}, {4:.8e}, {5:.8e}, {6:.8e}, {7:.8e}, {8:.8e}, {9:.8e}, {10:.8e}, {11:.8e}, {12:.8e}, {13:.8e}, {14:.8e}, {15:.8e}, {16:.8e}, {17:.8e}, {18:.8e}, {19:.8e}\n"\
-            .format(Hz, Mz/spin, mza1, mzb1, mzc1, mxa1, mxb1, mxc1, mza2, mzb2, mzc2, mxa2, mxb2, mxc2, mza3, mzb3, mzc3, mxa3, mxb3, mxc3) )
-
-        f.flush() 
-        #ta1 = Calcu_Unit_down(A1,B1,C1, R1_up, R1_low)
-        #ta2 = Calcu_Unit_down(A2,B2,C2, R2_up, R2_low)
-        #ta3 = Calcu_Unit_down(A3,B3,C3, R3_up, R3_low)
-    
-        
-
-
+        print(Hz, Mz/spin,"\n")
+        f.write("{0:.8e}, {1:.8e}, {2:.8e}, {3:.8e}\n".format(Hz, Mz/spin, M1/spin, M2/spin))
 
         ####### CTMRG ###############
-        """
+        
         
 
-        Lx=3; Ly=3
-        SU_ten =[ [ta1,ta2,ta3], [ta2,ta3,ta1],[ta3,ta1,ta2] ]
+        Lx=3; Ly=6
+        SU_ten =[ [ta4,ta3,ta2], [ta6,ta5,ta1],[ta2,ta4,ta3], [ta1,ta6,ta5], [ta3,ta2,ta4], [ta5,ta1,ta6] ]
         CTMs = [[0 for y in range(Ly)]  for x in range(Lx)  ]
-
+  
 
         ## SUで得られた初期テンソルをクラスのリストに代入する
         for x, y in product(range(Lx), range(Ly) ):
@@ -948,11 +992,11 @@ if __name__=="__main__":
                 x1 = (x+1)%Lx ; x2 = (x+2)%Lx ; x3 = (x+3)%Lx 
                 y1 = (y+1)%Ly ; y2 = (y+2)%Ly ; y3 = (y+3)%Ly
 
-                E_down, mxa, mza, mxb, mzb, mxc, mzc= ComputeQuantities_down_triangle(\
+                mxa, mza, mxb, mzb, mxc, mzc= ComputeQuantities_down_triangle1(\
                     SU_ten[y1][x1], CTMs[x1][y1].Ta, CTMs[x2][y1].Ta, CTMs[x2][y2].Ta, CTMs[x1][y2].Ta,\
                     CTMs[x][y].C1, CTMs[x2][y].C2, CTMs[x2][y2].C3, CTMs[x][y2].C4,\
                     CTMs[x1][y].T1, CTMs[x2][y1].T1, CTMs[x3][y2].T2, CTMs[x3][y2].T2,\
-                    CTMs[x2][y3].T3, CTMs[x1][y3].T3, CTMs[x][y2].T4, CTMs[x][y1].T4,H)
+                    CTMs[x2][y3].T3, CTMs[x1][y3].T3, CTMs[x][y2].T4, CTMs[x][y1].T4)
 
                 CTMs[x1][y1].mxa=mxa
                 CTMs[x1][y1].mza=mza
@@ -960,66 +1004,72 @@ if __name__=="__main__":
                 CTMs[x1][y1].mzb=mzb
                 CTMs[x1][y1].mxc=mxc
                 CTMs[x1][y1].mzc=mzc
-                CTMs[x1][y1].E_down=E_down
 
-                #print(i, x1,y1, E_down)
-                #print("A site: ",mxa, mza, np.sqrt(mxa**2 + mza**2))
-                #print("B site: ",mxb, mzb, np.sqrt(mxb**2 + mzb**2))
-                #print("C site: ",mxc, mzc, np.sqrt(mxc**2 + mzc**2),"\n")
-            print(i,E_down)
-            Mza = CTMs[0][0].mza + CTMs[1][0].mza + CTMs[1][1].mza
-            Mzb = CTMs[0][0].mzb + CTMs[1][0].mzb + CTMs[1][1].mzb
-            Mzc = CTMs[0][0].mzc + CTMs[1][0].mzc + CTMs[1][1].mzc
-            Mz_tot = (Mza + Mzb + Mzc)/9.
+            Mz_chain = CTMs[2][0].mzb + CTMs[1][0].mzb + CTMs[0][0].mzb + CTMs[2][0].mzc + CTMs[1][0].mzc + CTMs[0][0].mzc
+            Mz_delta = CTMs[2][1].mzb + CTMs[1][1].mzb + CTMs[0][1].mzb + CTMs[2][1].mzc + CTMs[1][1].mzc + CTMs[0][1].mzc+\
+                       CTMs[2][1].mza + CTMs[2][0].mza + CTMs[1][0].mza + CTMs[0][0].mza + CTMs[1][1].mza + CTMs[0][1].mza
+            Mz_chain = Mz_chain/18.0
+            Mz_delta = Mz_delta/18.0
+            Mz_tot = Mz_chain + Mz_delta
 
         print("CTMRG Result")
-        print("E1_down: ", CTMs[0][0].E_down) 
-        print("A1: ", CTMs[0][0].mxa, CTMs[0][0].mza)
-        print("B1: ", CTMs[0][0].mxb, CTMs[0][0].mzb)
-        print("C1: ", CTMs[0][0].mxc, CTMs[0][0].mzc,"\n")
+        print("A1: ", CTMs[2][1].mxa, CTMs[2][1].mza)
+        print("B1: ", CTMs[2][1].mxb, CTMs[2][1].mzb)
+        print("C1: ", CTMs[2][1].mxc, CTMs[2][1].mzc,"\n")
 
-        print("E2_down: ", CTMs[2][2].E_down)
-        print("A2: ", CTMs[2][2].mxa, CTMs[2][2].mza)
-        print("B2: ", CTMs[2][2].mxb, CTMs[2][2].mzb)
-        print("C2: ", CTMs[2][2].mxc, CTMs[2][2].mzc,"\n")
+        print("A2: ", CTMs[2][0].mxa, CTMs[2][0].mza)
+        print("B2: ", CTMs[2][0].mxb, CTMs[2][0].mzb)
+        print("C2: ", CTMs[2][0].mxc, CTMs[2][0].mzc,"\n")
 
-        print("E3_down: ", CTMs[1][1].E_down)
-        print("A3: ", CTMs[1][1].mxa, CTMs[1][1].mza)
-        print("B3: ", CTMs[1][1].mxb, CTMs[1][1].mzb)
-        print("C3: ", CTMs[1][1].mxc, CTMs[1][1].mzc,"\n")
+        print("A3: ", CTMs[1][0].mxa, CTMs[1][0].mza)
+        print("B3: ", CTMs[1][0].mxb, CTMs[1][0].mzb)
+        print("C3: ", CTMs[1][0].mxc, CTMs[1][0].mzc,"\n")
 
-        #print(Hz, Mz_tot/spin)
-        print( 2*(CTMs[0][0].E_down + CTMs[2][2].E_down + CTMs[1][1].E_down)/9. )
+        print("A4: ", CTMs[0][0].mxa, CTMs[0][0].mza)
+        print("B4: ", CTMs[0][0].mxb, CTMs[0][0].mzb)
+        print("C4: ", CTMs[0][0].mxc, CTMs[0][0].mzc,"\n")
+
+        print("A5: ", CTMs[1][1].mxa, CTMs[1][1].mza)
+        print("B5: ", CTMs[1][1].mxb, CTMs[1][1].mzb)
+        print("C5: ", CTMs[1][1].mxc, CTMs[1][1].mzc,"\n")
+
+        print("A6: ", CTMs[0][1].mxa, CTMs[0][1].mza)
+        print("B6: ", CTMs[0][1].mxb, CTMs[0][1].mzb)
+        print("C6: ", CTMs[0][1].mxc, CTMs[0][1].mzc,"\n")
+        print(Hz, Mz_tot/spin, Mz_delta/spin)
+        f1.write("{0:.8e}, {1:.8e}, {2:.8e}, {3:.8e}\n".format(Hz, Mz_tot/spin, Mz_delta/spin, Mz_chain/spin))
+
+  
+        print("Simple Update Result")
+        print("A1: ",mxa1, mza1, np.sqrt(mxa1**2 + mza1**2))
+        print("B1: ",mxb1, mzb1, np.sqrt(mxb1**2 + mzb1**2))
+        print("C1: ",mxc1, mzc1, np.sqrt(mxc1**2 + mzc1**2), "\n")
+
+        print("A2: ",mxa2, mza2, np.sqrt(mxa2**2 + mza2**2))
+        print("B2: ",mxb2, mzb2, np.sqrt(mxb2**2 + mzb2**2))
+        print("C2: ",mxc2, mzc2, np.sqrt(mxc2**2 + mzc2**2), "\n")
+
+        print("A3: ",mxa3, mza3, np.sqrt(mxa3**2 + mza3**2))
+        print("B3: ",mxb3, mzb3, np.sqrt(mxb3**2 + mzb3**2))
+        print("C3: ",mxc3, mzc3, np.sqrt(mxc3**2 + mzc3**2), "\n")
+
+        print("A4: ",mxa4, mza4, np.sqrt(mxa4**2 + mza4**2))
+        print("B4: ",mxb4, mzb4, np.sqrt(mxb4**2 + mzb4**2))
+        print("C4: ",mxc4, mzc4, np.sqrt(mxc4**2 + mzc4**2), "\n")
+
+        print("A5: ",mxa5, mza5, np.sqrt(mxa5**2 + mza5**2))
+        print("B5: ",mxb5, mzb5, np.sqrt(mxb5**2 + mzb5**2))
+        print("C5: ",mxc5, mzc5, np.sqrt(mxc5**2 + mzc5**2), "\n")
+
+        print("A6: ",mxa6, mza6, np.sqrt(mxa6**2 + mza6**2))
+        print("B6: ",mxb6, mzb6, np.sqrt(mxb6**2 + mzb6**2))
+        print("C6: ",mxc6, mzc6, np.sqrt(mxc6**2 + mzc6**2), "\n")
+        print(Hz, Mz/spin, M1/spin)
+
+        
         
 
-        
-        print("SU Result")
-        print("E1_down: ", E1_down)       
-        print("A1 site: ",mxa1, mza1, np.sqrt(mxa1**2 + mza1**2))
-        print("B1 site: ",mxb1, mzb1, np.sqrt(mxb1**2 + mzb1**2))
-        print("C1 site: ",mxc1, mzc1, np.sqrt(mxc1**2 + mzc1**2),"\n")
-
-        print("E2_down: ", E2_down)
-        print("A2 site: ",mxa2, mza2, np.sqrt(mxa2**2 + mza2**2))
-        print("B2 site: ",mxb2, mzb2, np.sqrt(mxb2**2 + mzb2**2))
-        print("C2 site: ",mxc2, mzc2, np.sqrt(mxc2**2 + mzc2**2),"\n")
-
-        print("E3_down: ", E3_down)
-        print("A3 site: ",mxa3, mza3, np.sqrt(mxa3**2 + mza3**2))
-        print("B3 site: ",mxb3, mzb3, np.sqrt(mxb3**2 + mzb3**2))
-        print("C3 site: ",mxc3, mzc3, np.sqrt(mxc3**2 + mzc3**2),"\n")
-            
-        Mz =(mza1 + mza2 + mza3 + mzb1 + mzb2 + mzb3 + mzc1 + mzc2 + mzc3)/9. 
-        
-        
-        #print(Hz, Mz/spin)
-        print( 2*(E1_down+E2_down+E3_down)/9.)
-        exit()
-        #f.write("{0:.8e}, {1:.8e}\n".format(Hz, Mz/spin/12.))
-        """
-    f.close()
-        
-        
+  
     
     
 

@@ -766,7 +766,8 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(description='',allow_abbrev=False)
     #parser.add_argument("--omp_cores", type=int, default=1,help="number of OpenMP cores")
     parser.add_argument("--D", type=int, default=2, help="Virtual bond dimension")
-    parser.add_argument("--J", type=float, default=1, help="maximal number of epochs")
+    parser.add_argument("--J", type=float, default=1, help="coupling constant on down trianle")
+    parser.add_argument("--J_up", type=float, default=1, help="coupling constant on up triangle")
     parser.add_argument("--dt", type=float, default=0.01, help="inmaginary time")
     parser.add_argument("--chi", type=int, default=20, help="bond dimensions of CTM")
     parser.add_argument("--spin", type=float, default=0.5, help="spin value")
@@ -781,6 +782,7 @@ if __name__=="__main__":
 
     D= args.D
     J= args.J
+    J_up= args.J_up
     dt= args.dt
     chi= args.chi
     spin = args.spin
@@ -824,7 +826,7 @@ if __name__=="__main__":
         for i in range(maxstepTEBD):
 
             H, Ham = Hamiltonian_Heisen_In_Trian(J,Hz,spin)
-            H1, Ham1 = Hamiltonian_Heisen_In_Trian(J,Hz,spin)
+            H1, Ham1 = Hamiltonian_Heisen_In_Trian(J_up,Hz,spin)
             U = expm(-tau*H).reshape(d_spin, d_spin,d_spin, d_spin, d_spin, d_spin)
             U1 = expm(-tau*H1).reshape(d_spin, d_spin,d_spin, d_spin, d_spin, d_spin)
 
